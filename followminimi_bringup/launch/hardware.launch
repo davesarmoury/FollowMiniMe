@@ -1,4 +1,0 @@
-<launch>
-    <include file="$(find followminimi_bringup)/launch/bunker.launch" />
-    <include file="$(find followminimi_bringup)/launch/zed.launch" />
-</launch>

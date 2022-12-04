@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<robot name="bunker" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:include filename="$(find bunker_description)/urdf/bunkerPro.urdf.xacro"/>
+  <xacro:include filename="$(find zed_wrapper)/urdf/zed_macro.urdf.xacro" />
+
+  <xacro:zed_camera name="zed2i" model="zed2i" parent="zed_link">
+    <origin xyz="0 0 0" rpy="0 0 0" />
+  </xacro:zed_camera>
+
+  <link name="zed_link" />
+
+  <joint name="zed_joint" type="fixed">
+    <parent link="front_mount_link" />
+    <child link="zed_link" />
+    <origin xyz="0.0116 0.0 -0.016" rpy="3.14159 0 0"/>
+  </joint>
+
+  <joint name="comfy_joint" type="fixed">
+    <parent link="chassis_link" />
+    <child link="comfy_link" />
+    <origin xyz="0.0524015 0 0.460276" rpy="0 0 0"/>
+  </joint>
+
+  <link name="comfy_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://followminime_description/meshes/FrankChair.dae"/>
+      </geometry>
+    </visual>
+  </link>
+</robot>
