@@ -10,3 +10,6 @@
 [submodule "zed-ros-wrapper"]
 	path = zed-ros-wrapper
 	url = git@github.com:stereolabs/zed-ros-wrapper.git
+[submodule "followminime_control/yolov5"]
+	path = followminime_control/yolov5
+	url = git@github.com:ultralytics/yolov5.git
