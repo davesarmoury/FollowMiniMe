@@ -16,8 +16,8 @@ from numpy import random
 
 sys.path.insert(0, '../yolov5')
 from models.experimental import attempt_load
-from utils.general import check_img_size, non_max_suppression, scale_coords, xyxy2xywh
-from utils.torch_utils import select_device, time_synchronized
+from utils.general import check_img_size, non_max_suppression
+from utils.torch_utils import select_device, time_sync
 
 from threading import Lock, Thread
 from time import sleep
@@ -52,8 +52,7 @@ def zed_thread(svo_filepath=None):
     init_params.coordinate_units = sl.UNIT.METER
     init_params.coordinate_system = sl.COORDINATE_SYSTEM.RIGHT_HANDED_Z_UP_X_FWD
     init_params.depth_mode = sl.DEPTH_MODE.QUALITY
-    init_params.depth_maximum_distance = 40
-    init_params.sensing_mode = sl.SENSING_MODE.FILL ## Not good for mapping, but good for this
+    init_params.depth_maximum_distance = 20
 
     runtime_params = sl.RuntimeParameters(sensing_mode=sl.SENSING_MODE.FILL, enable_depth=True)
 
@@ -118,7 +117,8 @@ def main():
     half = device.type != 'cpu'  # half precision only supported on CUDA
 
     # Load model
-    model = attempt_load(weights, map_location=device)  # load FP32 modelimgsz
+    
+    model = attempt_load(weights, device=device)  # load FP32 modelimgsz
     stride = int(model.stride.max())  # model stride
     imgsz = check_img_size(imgsz, s=stride)  # check img_size
     if half:
@@ -144,8 +144,7 @@ def main():
             net_image = visual_frame.copy()
 
             net_image = net_image[:,:,:3]
-            net_image = net_image[0:720, 280:280+720]
-            net_image = cv2.resize(net_image, (416, 416))
+            net_image = cv2.resize(net_image, (network_width, network_height))
             net_image = net_image.transpose((2, 0, 1))
             net_image = np.ascontiguousarray(net_image)
 
@@ -156,11 +155,11 @@ def main():
             if img.ndimension() == 3:
                 img = img.unsqueeze(0)
 
-            t1 = time_synchronized()
+            t1 = time_sync()
             pred = model(img, augment=opt.augment)[0]
 
             pred = non_max_suppression(pred, opt.conf_thres, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms)
-            t2 = time_synchronized()
+            t2 = time_sync()
             s = ""
 
             rospy.loginfo("Done < " + str(t2 - t1) + "s >")
@@ -169,9 +168,10 @@ def main():
                 if len(det):
                     for *xyxy, conf, cls in reversed(det):
                         if conf > 0.85:
-                            p_scaled = [xyxy[0] * 720.0/416.0, xyxy[1] * 720.0/416.0, xyxy[2] * 720.0/416.0, xyxy[3] * 720.0/416.0]
+                            vertical_scale = image_height / network_height;
+                            horizontal_scale = image_width / network_width;
+                            p_scaled = [xyxy[0] * horizontal_scale, xyxy[1] * vertical_scale, xyxy[2] * horizontal_scale, xyxy[3] * vertical_scale]
                             h_origin = [(p_scaled[0] + p_scaled[2]) / 2.0, (p_scaled[1] + p_scaled[3]) / 2.0]
-                            #Z = depth_measure_frame[int(h_origin[0]), int(h_origin[1])]
 
                             err, world_pose = point_cloud.get_value(int(h_origin[0]), int(h_origin[1]))
 
@@ -199,7 +199,7 @@ def main():
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--weights', nargs='+', type=str, default='../weights/best.pt', help='model.pt path(s)')
+    parser.add_argument('--weights', nargs='+', type=str, default='../weights/large.pt', help='model.pt path(s)')
     parser.add_argument('--svo', type=str, default=None, help='optional svo file')
     parser.add_argument('--img-size', type=int, default=416, help='inference size (pixels)')
     parser.add_argument('--conf-thres', type=float, default=0.4, help='object confidence threshold')
