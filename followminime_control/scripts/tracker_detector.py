@@ -32,16 +32,16 @@ network_height = 540
 image_width = 1920
 image_height = 1080
 
-vel_scaling = 1
+follow_distance = 1
 max_vel = 1.5
-ideal_distance = 1
+max_yaw = 1.5
 
 
 def zed_thread(svo_filepath=None):
 
     global image_left, image_depth, point_cloud, exit_signal, new_data, camera_info
 
-    print("Initializing Camera...")
+    rospy.loginfo("Initializing Camera...")
 
     zed = sl.Camera()
 
@@ -62,7 +62,7 @@ def zed_thread(svo_filepath=None):
     status = zed.open(init_params)
 
     if status != sl.ERROR_CODE.SUCCESS:
-        print(repr(status))
+        rospy.loginfo(repr(status))
         exit()
 
     camera_info = zed.get_camera_information().calibration_parameters.left_cam
@@ -71,7 +71,7 @@ def zed_thread(svo_filepath=None):
     image_depth_tmp = sl.Mat()
     point_cloud = sl.Mat()
 
-    print("Initialized Camera")
+    rospy.loginfo("Initialized Camera")
 
     while not exit_signal:
         if zed.grab(runtime_params) == sl.ERROR_CODE.SUCCESS:
@@ -92,12 +92,12 @@ def zed_thread(svo_filepath=None):
         sleep(0.01)
 
 
-    print("Cleaning Up Camera")
+    rospy.loginfo("Cleaning Up Camera")
     image_depth_tmp.free(sl.MEM.CPU)
     image_left_tmp.free(sl.MEM.CPU)
     zed.close()
 
-    print("ZED Thread Dead...")
+    rospy.loginfo("ZED Thread Dead...")
 
 def main():
     global image_left, image_depth, point_cloud, exit_signal, new_data, camera_info
@@ -113,7 +113,7 @@ def main():
     capture_thread = Thread(target=zed_thread, kwargs={'svo_filepath': opt.svo})
     capture_thread.start()
 
-    print("intializing Network...")
+    rospy.loginfo("intializing Network...")
 
     weights, imgsz = opt.weights, opt.img_size
     device = select_device(opt.device)
@@ -134,7 +134,7 @@ def main():
     if device.type != 'cpu':
         model(torch.zeros(1, 3, imgsz, imgsz).to(device).type_as(next(model.parameters())))  # run once
 
-    print("Running tracker detection ... Press 'Esc' to quit")
+    rospy.loginfo("Running tracker detection ... Press 'Esc' to quit")
 
     while True:
         if new_data:
@@ -162,9 +162,8 @@ def main():
 
             pred = non_max_suppression(pred, opt.conf_thres, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms)
             t2 = time_sync()
-            s = ""
 
-            rospy.loginfo("Done < " + str(t2 - t1) + "s >")
+            t_msg = Twist()
 
             for i, det in enumerate(pred):
                 if len(det):
@@ -178,15 +177,15 @@ def main():
                             err, world_pose = point_cloud.get_value(int(h_origin[0]), int(h_origin[1]))
                             
                             x_centered = h_origin[0] - ( image_width / 2 )
-                            rospy.loginfo(x_centered)
+                            
                             yaw = -math.sin( x_centered * math.pi / image_width )
-                            x_vel = math.sin(( world_pose[0] - ideal_distance ) * math.pi / vel_scaling )
+                            lat_distance = math.sqrt(world_pose[0] * world_pose[0] + world_pose[1] * world_pose[1])
 
-                            t_msg = Twist()
+                            rospy.loginfo(lat_distance)
+                            x_vel = math.tanh( lat_distance - follow_distance ) * max_vel
+
                             t_msg.angular.z = yaw
                             t_msg.linear.x = x_vel
-
-                            pub2.publish(t_msg)
 
                             msg.pose.position.x = world_pose[0]
                             msg.pose.position.y = world_pose[1]
@@ -196,7 +195,10 @@ def main():
 
                             cv2.rectangle(visual_frame, (int(p_scaled[0]),  int(p_scaled[1])), (int(p_scaled[2]), int(p_scaled[3])), (0,0,255), 3)
 
-                s += '%gx%g ' % img.shape[2:]  # print string
+            pub2.publish(t_msg)
+            t3 = time_sync()
+
+            rospy.loginfo("Done < " + str(t2 - t1) + "s + " + str(t3 - t2) + "s = " + str(t3 - t1) + "s >")
 
             cv2.imshow("ZED", visual_frame)
 
