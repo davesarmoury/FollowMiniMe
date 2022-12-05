@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
-import time
+import math
 from pathlib import Path
 import sys
 import numpy as np
@@ -12,18 +12,16 @@ import cv2
 import pyzed.sl as sl
 
 import torch.backends.cudnn as cudnn
-from numpy import random
+from threading import Lock, Thread
+from time import sleep
+
+import rospy
+from geometry_msgs.msg import PoseStamped, Twist
 
 sys.path.insert(0, '../yolov5')
 from models.experimental import attempt_load
 from utils.general import check_img_size, non_max_suppression
 from utils.torch_utils import select_device, time_sync
-
-from threading import Lock, Thread
-from time import sleep
-
-import rospy
-from geometry_msgs.msg import PoseStamped
 
 lock = Lock()
 new_data = False
@@ -33,6 +31,11 @@ network_width = 416
 network_height = 416
 image_width = 1920
 image_height = 1080
+
+vel_scaling = 2 # Ramp to max velocity over X meters
+max_vel = 1.5
+ideal_distance = 1
+
 
 def zed_thread(svo_filepath=None):
 
@@ -99,8 +102,9 @@ def zed_thread(svo_filepath=None):
 def main():
     global image_left, image_depth, point_cloud, exit_signal, new_data, camera_info
 
-    pub = rospy.Publisher('tracker_positioning', PoseStamped, queue_size=10)
     rospy.init_node('tracker_of_trackers', anonymous=True)
+    pub = rospy.Publisher('tracker_positioning', PoseStamped, queue_size=10)
+    pub2 = rospy.Publisher('tracker_cmd_vel', Twist, queue_size=10)
 
     msg = PoseStamped()
     msg.header.frame_id = "left_camera"
@@ -118,7 +122,7 @@ def main():
 
     # Load model
     
-    model = attempt_load(weights, device=device)  # load FP32 modelimgsz
+    model = attempt_load(weights, device=device, fuse=False)  # load FP32 modelimgsz
     stride = int(model.stride.max())  # model stride
     imgsz = check_img_size(imgsz, s=stride)  # check img_size
     if half:
@@ -136,8 +140,6 @@ def main():
         if new_data:
             lock.acquire()
             visual_frame = image_left.copy()
-            depth_frame = image_depth.copy()
-            depth_measure_frame = image_depth.copy()
             lock.release()
             new_data = False
 
@@ -174,6 +176,17 @@ def main():
                             h_origin = [(p_scaled[0] + p_scaled[2]) / 2.0, (p_scaled[1] + p_scaled[3]) / 2.0]
 
                             err, world_pose = point_cloud.get_value(int(h_origin[0]), int(h_origin[1]))
+                            
+                            x_centered = h_origin[0] - ( image_width / 2 )
+                            rospy.loginfo(x_centered)
+                            yaw = -math.sin( x_centered * math.pi / image_width )
+                            x_vel = math.sin(( world_pose[0] - ideal_distance ) * math.pi / vel_scaling )
+
+                            t_msg = Twist()
+                            t_msg.angular.z = yaw
+                            t_msg.linear.x = x_vel
+
+                            pub2.publish(t_msg)
 
                             msg.pose.position.x = world_pose[0]
                             msg.pose.position.y = world_pose[1]
