@@ -27,12 +27,12 @@ lock = Lock()
 new_data = False
 exit_signal = False
 
-network_width = 416
-network_height = 416
+network_width = 540
+network_height = 540
 image_width = 1920
 image_height = 1080
 
-vel_scaling = 2 # Ramp to max velocity over X meters
+vel_scaling = 1
 max_vel = 1.5
 ideal_distance = 1
 
@@ -212,7 +212,7 @@ def main():
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--weights', nargs='+', type=str, default='../weights/large.pt', help='model.pt path(s)')
+    parser.add_argument('--weights', nargs='+', type=str, default='../weights/medium.pt', help='model.pt path(s)')
     parser.add_argument('--svo', type=str, default=None, help='optional svo file')
     parser.add_argument('--img-size', type=int, default=416, help='inference size (pixels)')
     parser.add_argument('--conf-thres', type=float, default=0.4, help='object confidence threshold')
