@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 import argparse
 import math
 from pathlib import Path
@@ -56,6 +55,7 @@ def zed_thread(svo_filepath=None):
     init_params.coordinate_system = sl.COORDINATE_SYSTEM.RIGHT_HANDED_Z_UP_X_FWD
     init_params.depth_mode = sl.DEPTH_MODE.QUALITY
     init_params.depth_maximum_distance = 20
+    init_params.camera_image_flip  = sl.FLIP_MODE.ON ## Camera mounted upside-down
 
     runtime_params = sl.RuntimeParameters(sensing_mode=sl.SENSING_MODE.FILL, enable_depth=True)
 
@@ -90,7 +90,6 @@ def zed_thread(svo_filepath=None):
             new_data = True
 
         sleep(0.01)
-
 
     rospy.loginfo("Cleaning Up Camera")
     image_depth_tmp.free(sl.MEM.CPU)
@@ -200,7 +199,7 @@ def main():
 
             rospy.loginfo("Done < " + str(t2 - t1) + "s + " + str(t3 - t2) + "s = " + str(t3 - t1) + "s >")
 
-            cv2.imshow("ZED", visual_frame)
+            cv2.imshow("ZED", cv2.resize(visual_frame, (1280, 720)))
 
             key = cv2.waitKey(5)
             if key == 27:    # Esc key to stop
